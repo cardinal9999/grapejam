@@ -9,7 +9,7 @@ class GrapeJamError(Exception):
 def dumps(obj):
     if isinstance(obj, bytes):
         newlist = list(obj)
-        return  f"?{json.dumps(newlist)}"
+        return  f"?{json.dumps(newlist)[1:][:-1]}"
     elif isinstance(obj, bytearray):
         newlist = list(obj)
         return f"/{json.dumps(newlist)}"
@@ -21,10 +21,8 @@ def dumps(obj):
         return f"#{str(obj)}"
     elif isinstance(obj, list):
         for i, item in enumerate(obj):
-            if isinstance(item, set): 
-                obj[i] = ["*py-set-obj", list(item)]
-            elif isinstance(item, tuple):
-                obj[i] = ["*py-tuple-obj", list(item)]
+            if isinstance(item, (list, tuple)): 
+                obj[i] = [chr(7), dumps(item)]
         return f"${json.dumps(obj)}"
     elif isinstance(obj, tuple):
         obj = list(obj)
@@ -56,30 +54,28 @@ def dumps(obj):
     else:
         raise GrapeJamError("problem processing object")
 def loads(string):
-    valid = ["!", "@", "#", "$", "%", "^", "&", "*", "+", "-", "~", ":", "?", "/", "_"]
+    valid = '!@#$%^&*+-~:?/_'
     if string[0] not in valid:
         raise GrapeJamError("problem processing string")
     string = list(string)
-    usedchar = string.pop(0)
+    t = string.pop(0)
     string = "".join(string)
-    if usedchar == "!":
+    if t == "!":
         return bool(json.loads(string))
-    elif usedchar == "@":
+    elif t == "@":
         return int(string)
-    elif usedchar == "#":
+    elif t == "#":
         return string
-    elif usedchar == "$":
+    elif t == "$":
         parsed = json.loads(string)
         for i, _obj in enumerate(parsed):
             if isinstance(_obj, list):
-                if _obj[0] == "*py-set-obj":
-                    parsed[i] = set(_obj[1])
-                elif _obj[0] == "*py-tuple-obj":
-                    parsed[i] = tuple(_obj[1])
+                if _obj[0] == chr(7):
+                    parsed[i] = loads(_obj[1])
                 else:
                     pass
         return parsed
-    elif usedchar == "%":
+    elif t == "%":
         parsed = json.loads(string)
         for i, _obj in enumerate(parsed):
             if isinstance(_obj, list):
@@ -90,28 +86,28 @@ def loads(string):
                 else:
                     pass
         return tuple(parsed)
-    elif usedchar == "^" or usedchar == "&":
+    elif t == "^" or t == "&":
         return json.loads(string)
-    elif usedchar == "*":
+    elif t == "*":
         if string == "*N":
             return None
         
-    elif usedchar == "+":
+    elif t == "+":
         m = json.loads(string)
         n = min(m)
         o = max(m) + 1
         return range(n, o)
-    elif usedchar == "-":
+    elif t == "-":
         return complex(string)
-    elif usedchar == "~":
+    elif t == "~":
         return set(json.loads(string))
-    elif usedchar == ":":
+    elif t == ":":
         return frozenset(json.loads(string))
-    elif usedchar == "?":
-        return bytes(json.loads(string))
-    elif usedchar == "/":
+    elif t == "?":
+        return bytes(json.loads("[" + string + "]"))
+    elif t == "/":
         return bytearray(json.loads(string))
-    elif usedchar == "_":
+    elif t == "_":
         a = json.loads(string)
         a = "-".join(a)
         return datetime.strptime(a, "%Y-%m-%d-%H-%M-%S-%f")
@@ -126,7 +122,7 @@ def load(file):
     return parsed
 def test():
     a = dumps("hello")
-    b = dumps(("mouse", [2, 8, 4], None))
+    b = dumps(["mouse", [2, 8, 4, "string"], None, ("tuple",)])
     c = dumps(range(15))
     d = loads(a)
     e = loads(b)
